@@ -1,0 +1,220 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+<style comment="yeah it should be external but this is just a demo">
+  .cs {font-size: small; text-align: center}
+  .dropcapped:first-letter {font-size: 150%}
+  .indented {text-indent: .25in}
+  a:hover {background: green; color: white}
+  h1 {color: red; text-align: center}
+</style>
+<meta name="description" content="Dave Aronson's Google Maps API based address
+center finder; finds the center of several addresses, using the Google Maps
+API">
+
+ <title>Dave Aronson's Google Maps API Address Center-Finder</title>
+
+ <script src="https://maps.google.com/maps?file=api&amp;v=2&amp;key=AIzaSyBH-_s_ogzz-XahrkGDwo0F8mzneT6lTag"
+         type="text/javascript"></script>
+ <script type="text/javascript">
+
+  //<![CDATA[
+
+
+  var geocoder = new GClientGeocoder();
+  var isIE;
+  var mapDiv;
+  var numAddiesGood;
+  var numAddiesRcvd;
+  var numAddiesSent;
+  var points;
+  var timeout;
+  var totLat;
+  var totLng;
+
+
+  function FindCenter()
+  {
+   if (GBrowserIsCompatible())
+   {
+    var addies = document.getElementById ("list").value.replace ('\r', '\n').split ('\n');
+    var i;
+    mapDiv = document.getElementById ("map");
+    mapDiv.innerHTML = '<big>Fetching information from Google....</big>';
+    numAddiesGood = 0;
+    numAddiesRcvd = 0;
+    numAddiesSent = 0;
+    points = [];
+    totLat = 0;
+    totLng = 0;
+    if (window.ActiveXObject) isIE = true;
+    else isIE = false;
+    for (i in addies)
+    {
+     var addy = addies[i];
+     if (addy != "")
+     {
+      geocoder.getLatLng (addy, ReceiveAddy);
+      numAddiesSent += 1;
+     }
+    }
+    timeout = window.setTimeout (StopWaiting, 10000);
+   }
+   else mapDiv.innerHTML = "Sorry, your browser is not compatible!";
+  } // FindCenter()
+
+
+
+  // tell whether a map includes points in a list
+  // if needall is true, tell whether it includes ALL, else just look for ANY
+  function MapIncludesPoints (map, points)
+  {
+    var bounds;
+    var east;
+    var i;
+    var ne;
+    var north;
+    var south;
+    var sw;
+    var west;
+
+    bounds = map.getBounds();
+    ne = bounds.getNorthEast();
+    sw = bounds.getSouthWest();
+
+    north = ne.lat();
+    south = sw.lat();
+    east = ne.lng();
+    west = sw.lng();
+
+    for (i in points)
+    {
+      var lat;
+      var lng;
+      var p;
+      var outEast;
+      var outWest;
+   
+      p = points[i];
+      lat = p.lat();
+      if (lat < south || lat > north) return false;
+
+      lng = p.lng();
+
+      if( west <= east) {  // noral case
+        outEast = lng > east;
+        outWest = lng < west;
+      } else {  // crossing international date line
+        outEast = lng < east;
+        outWest = lng > west;
+      }
+      
+      if (outWest || outEast) return false;
+    }
+    return true;
+  } // MapIncludesPoints()
+
+
+
+  function ReceiveAddy (point)
+  {
+   numAddiesRcvd += 1;
+   if (point)
+   {
+    totLat += point.lat();
+    totLng += point.lng();
+    points.push (point);
+    numAddiesGood += 1;
+   }
+   if (numAddiesRcvd == numAddiesSent && timeout != 0)
+   {
+    timeout = 0;
+    ShowResults();
+   }
+  } // ReceiveAddy()
+
+
+
+  function ShowResults()
+  {
+   var avgLat = totLat / numAddiesGood;
+   var avgLng = totLng / numAddiesGood;
+   var ctr = new GLatLng (avgLat, avgLng);
+   var map = new GMap2 (mapDiv);
+   var marker = new GMarker (ctr);
+   var i;
+   var icon = new GIcon();
+
+   map.addControl (new GLargeMapControl());
+   map.addControl (new GMapTypeControl());
+   map.setCenter (ctr, 13);
+   map.addOverlay (marker);
+   var icon = new GIcon();
+   icon.image = "http://labs.google.com/ridefinder/images/mm_20_blue.png";
+   icon.shadow = "http://labs.google.com/ridefinder/images/mm_20_shadow.png";
+   icon.iconSize = new GSize (12, 20);
+   icon.shadowSize = new GSize (22, 20);
+   icon.iconAnchor = new GPoint (6, 20);
+   icon.infoWindowAnchor = new GPoint (5, 1);
+   for (i in points) map.addOverlay (new GMarker (points[i], icon));
+   // TODO: look at MOVING the map instead
+   while (! MapIncludesPoints (map, points)) map.zoomOut();
+   if (numAddiesGood < numAddiesSent)
+   {
+    // TODO: figure out which ones!
+    alert ("At least one address could not be found");
+   }
+  } // ShowResults()
+
+
+
+  function StopWaiting()
+  {
+   if (timeout != 0)
+   {
+    timeout = 0;
+    alert ("Sorry, we didn't receive a reply for some addresses!");
+    ShowResults();
+   }
+   // else we've already shown the results
+  } // StopWaiting()
+
+
+  //]]>
+ </script>
+</head>
+<body onunload="GUnload()">
+
+<h1>Dave Aronson's Google Maps API Address Center-Finder</h1>
+
+<p><hr>
+
+<p class="dropcapped indented">This demo finds the center of a bunch of
+addresses, defined as the average of the latitudes and of the longitudes.
+(Note that this is <i>not</i> the same thing as midway between the extremes.
+Consider it a "weighted center".)
+
+<p class="indented">Put the addresses in the text box below, one per line, and
+click the button.  The big red marker with the dot on it, in the middle of the
+map, is the center.  The smaller blue markers represent addresses you put in.
+
+<p><table><tr>
+<td align="center" valign="top">
+ <textarea id="list" cols="30" rows="10" wrap="off"></textarea><br>
+ <input id="button" onClick="FindCenter();" type="button" value="Find Center">
+</td>
+<td><div id="map" style="width:750px;height:450px"></div></td>
+</tr>
+</table>
+
+<p><hr>
+
+<p class="cs"><a
+href="http://htmlgear.tripod.com/feed/control.feed?a=render&i=1&u=davearonson">[
+Email Me ]</a>
+
+</body>
+</html>
